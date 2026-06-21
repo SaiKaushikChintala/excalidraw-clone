@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/* Class-based dark mode for Tailwind dark: variant */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@font-face {
+  font-family: 'Virgil';
+  src: url('/Virgil.woff2') format('woff2');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Cascadia';
+  src: url('/Cascadia.woff2') format('woff2');
+  font-display: swap;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ── Excalidraw theme variables ────────────────────────────────────────────── */
+/* Light (matches excalidraw-master/packages/excalidraw/css/theme.scss) */
+:root {
+  --theme-filter: none;
+  --ex-island-bg: #ffffff;
+  --ex-island-border: #ebebeb;
+  --ex-text: #1b1b1f;
+  --ex-text-muted: #5c5c5c;
+  --ex-label: #868e96;
+  --ex-surface-high: #f1f0ff;
+  --ex-active-bg: #e0dfff;
+  --ex-active-text: #030064;
+  --ex-divider: #ebebeb;
+  --ex-primary: #6965db;
+  --ex-shadow: 0px 0px 1px 0px rgba(0,0,0,.17),
+               0px 0px 3px 0px rgba(0,0,0,.08),
+               0px 7px 14px 0px rgba(0,0,0,.05);
+}
+
+/* Dark (matches &.theme--dark overrides) */
+.dark {
+  --theme-filter: invert(93%) hue-rotate(180deg);
+  --ex-island-bg: #232329;
+  --ex-island-border: #2e2d39;
+  --ex-text: #e3e3e8;
+  --ex-text-muted: #b4b4be;
+  --ex-label: #9b9baf;
+  --ex-surface-high: #2e2d39;
+  --ex-active-bg: #403e6a;
+  --ex-active-text: #e0dfff;
+  --ex-divider: #373740;
+  --ex-primary: #a8a5ff;
+}
