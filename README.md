@@ -1,6 +1,6 @@
 # Excalidraw Clone
 
-A feature-rich clone of [Excalidraw](https://excalidraw.com), built from scratch and running entirely in the browser with no backend.
+A feature-rich clone of [Excalidraw](https://excalidraw.com), built from scratch in React. Draw on your own in the browser, or share a link and draw together in real time.
 
 <br>
 
@@ -17,19 +17,10 @@ A feature-rich clone of [Excalidraw](https://excalidraw.com), built from scratch
 - **Layer management** — Send to back/forward, bring to front/backward
 - **Undo / Redo** — Full history (up to 100 steps)
 - **Pan & Zoom** — Scroll wheel, pinch, or zoom controls; Ctrl+scroll
+- **Laser pointer** — A glowing, fading trail for pointing things out (press K)
+- **Live collaboration** — Press **Share** to get a link and a QR code; anyone who opens it draws on the same board with you in real time
 - **Dark / Light / System theme**
 - **Canvas backgrounds** — White, Slate, Blue, Yellow, Bronze
-- **Keyboard shortcuts** — H, V/1–8, E/0, Q (lock), Ctrl+Z/Y, Delete, Escape
-- **Persistent canvas** — Drawing auto-saved to localStorage; survives page refresh
+- **Keyboard shortcuts** — H, V/1–8, E/0, K (laser), Q (lock), Ctrl+Z/Y, Delete, Escape
+- **Persistent canvas** — When you draw on your own, your drawing is auto-saved to localStorage and survives a page refresh
 - **Responsive** — Floating island toolbar on desktop (top-center), scrollable bottom island on mobile
-
-## Tech Stack
-
-| Category  | Tech                                                                |
-| --------- | ------------------------------------------------------------------- |
-| Framework | [React 19](https://react.dev) + TypeScript                          |
-| Build     | [Vite 8](https://vitejs.dev)                                        |
-| Styles    | [Tailwind CSS v4](https://tailwindcss.com)                          |
-| Shapes    | [Rough.js](https://roughjs.com)                                     |
-| Freedraw  | [Perfect Freehand](https://github.com/steveruizok/perfect-freehand) |
-| Fonts     | Virgil (hand-drawn), Cascadia Code (monospace)                      |

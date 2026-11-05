@@ -20,6 +20,11 @@ export function generateSeed(): number {
   return Math.floor(Math.random() * 2 ** 31);
 }
 
+export function generateRoomId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(9));
+  return Array.from(bytes, b => b.toString(36).padStart(2, '0')).join('').slice(0, 12);
+}
+
 function base(state: AppState, x: number, y: number): Omit<DrawingElementBase, 'type'> {
   return {
     id: generateId(),
@@ -38,6 +43,8 @@ function base(state: AppState, x: number, y: number): Omit<DrawingElementBase, '
     opacity: state.opacity,
     seed: generateSeed(),
     isDeleted: false,
+    version: 1,
+    versionNonce: generateSeed(),
   };
 }
 

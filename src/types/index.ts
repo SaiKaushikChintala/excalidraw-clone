@@ -14,7 +14,8 @@ export type ToolType =
   | 'line'
   | 'freedraw'
   | 'text'
-  | 'eraser';
+  | 'eraser'
+  | 'laser';
 
 export type Roundness = 'sharp' | 'round';
 
@@ -36,6 +37,9 @@ export type DrawingElementBase = {
   opacity: number;
   seed: number;
   isDeleted: boolean;
+  version: number;
+  versionNonce: number;
+  index?: string;
 };
 
 export type RectangleElement = DrawingElementBase & {
@@ -118,3 +122,36 @@ export type LinearHandle = {
 };
 
 export type LayerOp = 'sendToBack' | 'sendBackward' | 'bringForward' | 'bringToFront';
+
+export type CollabStatus = 'idle' | 'connecting' | 'connected' | 'error';
+
+export type CollabPeer = {
+  id: string;
+  name: string;
+  color: string;
+};
+
+export type CollabCursor = {
+  x: number;
+  y: number;
+};
+
+export type RemoteSelection = {
+  id: string;
+  name: string;
+  color: string;
+  ids: string[];
+};
+
+export type PeerEvent = 'joined' | 'left';
+
+export type LaserPoint = { x: number; y: number; color: string };
+
+export type LocalState = {
+  selection: string[];
+};
+
+export type Toast = {
+  id: number;
+  text: string;
+};

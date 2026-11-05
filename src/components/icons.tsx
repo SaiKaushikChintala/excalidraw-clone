@@ -195,6 +195,33 @@ export function EraserIcon({ size = 20, className = '' }: IconProps): React.JSX.
   );
 }
 
+export function LaserPointerIcon({ size = 20, className = '' }: IconProps): React.JSX.Element {
+  return (
+    <Svg24 size={size} className={className}>
+      <g strokeWidth="1.5">
+        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+        <path d="M13.5 10.5 4 20" />
+        <path d="m14 4 .6 2.1L16.7 7l-2.1.9L14 10l-.6-2.1L11.3 7l2.1-.9z" />
+        <path d="m18.5 11 .4 1.3 1.3.5-1.3.5-.4 1.3-.5-1.3-1.2-.5 1.2-.5z" />
+      </g>
+    </Svg24>
+  );
+}
+
+export function PaletteIcon({ size = 20, className = '' }: IconProps): React.JSX.Element {
+  return (
+    <Svg24 size={size} className={className}>
+      <g strokeWidth="1.5">
+        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+        <path d="M12 21a9 9 0 1 1 0-18c4.97 0 9 3.58 9 8 0 2.21-1.79 3-3.5 3H15a2 2 0 0 0-1.5 3.3c.5.7.2 1.7-1.5 1.7z" />
+        <circle cx="7.5" cy="11" r="1" />
+        <circle cx="10.5" cy="7" r="1" />
+        <circle cx="15.5" cy="7.5" r="1" />
+      </g>
+    </Svg24>
+  );
+}
+
 export function UndoIcon({ size = 20, className = '' }: IconProps): React.JSX.Element {
   return (
     <Svg20 size={size} className={className}>
@@ -664,6 +691,19 @@ export function TextAlignRightIcon({ size = 20, className = '' }: IconProps): Re
       <g strokeWidth="2">
         <path stroke="none" d="M0 0h24v24H0z" fill="none" />
         <line x1="4" y1="8" x2="20" y2="8" /><line x1="10" y1="12" x2="20" y2="12" /><line x1="8" y1="16" x2="20" y2="16" />
+      </g>
+    </Svg24>
+  );
+}
+
+export function UsersIcon({ size = 20, className = '' }: IconProps): React.JSX.Element {
+  return (
+    <Svg24 size={size} className={className}>
+      <g strokeWidth="1.5">
+        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+        <circle cx="9" cy="8" r="3" />
+        <path d="M3 19v-1a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v1" />
+        <path d="M16 5.2a3 3 0 0 1 0 5.6M18.5 14.4A4 4 0 0 1 21 18v1" />
       </g>
     </Svg24>
   );

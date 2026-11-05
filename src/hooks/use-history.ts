@@ -1,15 +1,29 @@
 import { useRef, useCallback } from 'react';
 
 import type { DrawingElement } from '@/types';
+import { restoreOwnElements } from '@/utils/collab-utils';
 
 const MAX_HISTORY = 100;
 
 export function useHistory(
   elements: DrawingElement[],
   setElements: (els: DrawingElement[]) => void,
-): { pushHistory: (snapshot: DrawingElement[]) => void; undo: () => void; redo: () => void } {
+  isOwnElement?: (id: string) => boolean,
+): {
+  pushHistory: (snapshot: DrawingElement[]) => void;
+  undo: () => void;
+  redo: () => void;
+  clearHistory: () => void;
+} {
   const undoStack = useRef<DrawingElement[][]>([]);
   const redoStack = useRef<DrawingElement[][]>([]);
+
+  const restore = useCallback(
+    (snapshot: DrawingElement[]): void => {
+      setElements(isOwnElement ? restoreOwnElements(elements, snapshot, isOwnElement) : snapshot);
+    },
+    [elements, setElements, isOwnElement],
+  );
 
   const pushHistory = useCallback((snapshot: DrawingElement[]) => {
     undoStack.current.push(snapshot);
@@ -22,16 +36,19 @@ export function useHistory(
   const undo = useCallback(() => {
     if (!undoStack.current.length) return;
     redoStack.current.push([...elements]);
-    const prev = undoStack.current.pop()!;
-    setElements(prev);
-  }, [elements, setElements]);
+    restore(undoStack.current.pop()!);
+  }, [elements, restore]);
 
   const redo = useCallback(() => {
     if (!redoStack.current.length) return;
     undoStack.current.push([...elements]);
-    const next = redoStack.current.pop()!;
-    setElements(next);
-  }, [elements, setElements]);
+    restore(redoStack.current.pop()!);
+  }, [elements, restore]);
 
-  return { pushHistory, undo, redo };
+  const clearHistory = useCallback(() => {
+    undoStack.current = [];
+    redoStack.current = [];
+  }, []);
+
+  return { pushHistory, undo, redo, clearHistory };
 }

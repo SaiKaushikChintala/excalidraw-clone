@@ -12,6 +12,8 @@ import type {
   FreeDrawElement,
   TextElement,
   ResizeHandle,
+  RemoteSelection,
+  ViewTransform,
 } from '@/types';
 import {
   clientToScene,
@@ -118,7 +120,8 @@ type Interaction =
       elementId: string;
       pointIndex: number;
       snapshot: DrawingElement[];
-    };
+    }
+  | { type: 'laser' };
 
 type Props = {
   elements: DrawingElement[];
@@ -126,6 +129,12 @@ type Props = {
   onElementsChange: React.Dispatch<React.SetStateAction<DrawingElement[]>>;
   onAppStateChange: (updates: Partial<AppState>) => void;
   onCommitHistory: (snapshot: DrawingElement[]) => void;
+  onPointerScenePosition?: (x: number, y: number) => void;
+  onLaserPoint?: (x: number, y: number) => void;
+  onLaserEnd?: () => void;
+  remoteSelections?: RemoteSelection[];
+  remoteDrafts?: DrawingElement[];
+  onDraft?: (el: DrawingElement | null) => void;
 };
 
 export function CanvasBoard({
@@ -134,6 +143,12 @@ export function CanvasBoard({
   onElementsChange,
   onAppStateChange,
   onCommitHistory,
+  onPointerScenePosition,
+  onLaserPoint,
+  onLaserEnd,
+  remoteSelections,
+  remoteDrafts,
+  onDraft,
 }: Props): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -150,6 +165,17 @@ export function CanvasBoard({
   const trailActiveRef = useRef(false);
 
   const elementsRef = useRef(elements);
+  const remoteSelectionsRef = useRef<RemoteSelection[]>([]);
+  const remoteDraftsRef = useRef<DrawingElement[]>([]);
+  const touchPointsRef = useRef(new Map<number, { x: number; y: number }>());
+  const gestureActiveRef = useRef(false);
+  const lastTouchAtRef = useRef(0);
+  const gestureStartRef = useRef<{
+    dist: number;
+    midX: number;
+    midY: number;
+    view: ViewTransform;
+  } | null>(null);
   const appStateRef = useRef(appState);
   const commitTextEditRef = useRef<() => void>(() => {});
   const linearDragRef = useRef<{ id: string; pts: Array<[number, number]>; pointIndex: number } | null>(null);
@@ -170,6 +196,8 @@ export function CanvasBoard({
         stagingElement: stagingRef.current,
         dragSelection: dragSelRef.current,
         editingId: appStateRef.current.editingElementId,
+        remoteSelections: remoteSelectionsRef.current,
+        remoteDrafts: remoteDraftsRef.current,
       });
     });
   }, []);
@@ -200,6 +228,16 @@ export function CanvasBoard({
     appStateRef.current = appState;
     scheduleRender();
   }, [elements, appState, scheduleRender]);
+
+  useEffect(() => {
+    remoteSelectionsRef.current = remoteSelections ?? [];
+    scheduleRender();
+  }, [remoteSelections, scheduleRender]);
+
+  useEffect(() => {
+    remoteDraftsRef.current = remoteDrafts ?? [];
+    scheduleRender();
+  }, [remoteDrafts, scheduleRender]);
 
   const runTrailFrame = useCallback((): void => {
     function step() {
@@ -348,7 +386,7 @@ export function CanvasBoard({
 
       const toolMap: Record<string, string> = {
         h: 'hand', v: 'select', r: 'rectangle', d: 'diamond',
-        o: 'ellipse', a: 'arrow', l: 'line', p: 'freedraw', t: 'text', e: 'eraser',
+        o: 'ellipse', a: 'arrow', l: 'line', p: 'freedraw', t: 'text', e: 'eraser', k: 'laser',
         '1': 'select', '2': 'rectangle', '3': 'diamond', '4': 'ellipse',
         '5': 'arrow', '6': 'line', '7': 'freedraw', '8': 'text', '0': 'eraser',
       };
@@ -372,8 +410,75 @@ export function CanvasBoard({
     };
   }, [deleteSelected, onAppStateChange, onElementsChange, onCommitHistory]);
 
+  const cancelInteraction = useCallback((): void => {
+    const current = interactionRef.current;
+    if (current.type === 'drawing') {
+      stagingRef.current = null;
+      onDraft?.(null);
+    }
+    if (current.type === 'selecting') dragSelRef.current = null;
+    if (current.type === 'erasing') trailActiveRef.current = false;
+    if (current.type === 'laser') onLaserEnd?.();
+    interactionRef.current = { type: 'idle' };
+    scheduleRender();
+  }, [onLaserEnd, onDraft, scheduleRender]);
+
+  const readGesture = useCallback((): { dist: number; midX: number; midY: number } | null => {
+    const canvas = canvasRef.current;
+    const points = [...touchPointsRef.current.values()];
+    if (!canvas || points.length < 2) return null;
+    const rect = canvas.getBoundingClientRect();
+    const [a, b] = points;
+    return {
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+      midX: (a.x + b.x) / 2 - rect.left,
+      midY: (a.y + b.y) / 2 - rect.top,
+    };
+  }, []);
+
+  const beginGesture = useCallback((): void => {
+    const reading = readGesture();
+    if (!reading) return;
+    gestureStartRef.current = { ...reading, view: appStateRef.current.viewTransform };
+  }, [readGesture]);
+
+  const updateGesture = useCallback((): void => {
+    const start = gestureStartRef.current;
+    const now = readGesture();
+    if (!start || !now || start.dist < 1) return;
+    const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, start.view.zoom * (now.dist / start.dist)));
+    const sceneX = (start.midX - start.view.scrollX) / start.view.zoom;
+    const sceneY = (start.midY - start.view.scrollY) / start.view.zoom;
+    onAppStateChange({
+      viewTransform: { zoom, scrollX: now.midX - sceneX * zoom, scrollY: now.midY - sceneY * zoom },
+    });
+  }, [readGesture, onAppStateChange]);
+
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>): void => {
+      const nowMs = performance.now();
+      if (e.pointerType !== 'touch' || nowMs - lastTouchAtRef.current > 2000) {
+        touchPointsRef.current.clear();
+        gestureActiveRef.current = false;
+        gestureStartRef.current = null;
+      }
+
+      if (e.pointerType === 'touch') {
+        lastTouchAtRef.current = nowMs;
+        touchPointsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (touchPointsRef.current.size >= 2) {
+          canvasRef.current?.setPointerCapture(e.pointerId);
+          e.preventDefault();
+          if (!gestureActiveRef.current) {
+            gestureActiveRef.current = true;
+            cancelInteraction();
+          }
+          beginGesture();
+          return;
+        }
+        if (gestureActiveRef.current) return;
+      }
+
       if (e.button !== 0 && e.button !== 1) return;
 
       if (appStateRef.current.editingElementId) {
@@ -386,6 +491,7 @@ export function CanvasBoard({
 
       const [sx, sy] = toScene(e.clientX, e.clientY);
       const state = appStateRef.current;
+      const hitZoom = e.pointerType === 'touch' ? state.viewTransform.zoom / 2.5 : state.viewTransform.zoom;
 
       if (e.button === 1 || spaceHeldRef.current || state.activeTool === 'hand') {
         interactionRef.current = {
@@ -401,6 +507,12 @@ export function CanvasBoard({
 
       const tool = state.activeTool;
 
+      if (tool === 'laser') {
+        interactionRef.current = { type: 'laser' };
+        onLaserPoint?.(sx, sy);
+        return;
+      }
+
       if (tool === 'select') {
         if (state.selectedElementIds.size === 1) {
           const [selId] = [...state.selectedElementIds];
@@ -408,7 +520,7 @@ export function CanvasBoard({
 
           if (selEl && (selEl.type === 'line' || selEl.type === 'arrow')) {
             const linEl = selEl as LinearElement;
-            const h = getHitLinearHandle(linEl, sx, sy, state.viewTransform.zoom);
+            const h = getHitLinearHandle(linEl, sx, sy, hitZoom);
             if (h) {
               let pts: Array<[number, number]> = linEl.points.map(p => [p[0], p[1]]);
               if (h.insert) {
@@ -438,7 +550,7 @@ export function CanvasBoard({
               selEl.x, selEl.y, selEl.width, selEl.height, selEl.angle,
               state.viewTransform.zoom,
             );
-            const hit = getHitHandle(handles, sx, sy, state.viewTransform.zoom);
+            const hit = getHitHandle(handles, sx, sy, hitZoom);
             if (hit) {
               if (hit === 'rotation') {
                 const center = { x: selEl.x + selEl.width / 2, y: selEl.y + selEl.height / 2 };
@@ -466,7 +578,7 @@ export function CanvasBoard({
           }
         }
 
-        const hit = getElementAtPoint(elementsRef.current, sx, sy, state.viewTransform.zoom);
+        const hit = getElementAtPoint(elementsRef.current, sx, sy, hitZoom);
 
         if (hit) {
           if (e.shiftKey || e.ctrlKey || e.metaKey) {
@@ -508,7 +620,7 @@ export function CanvasBoard({
       if (tool === 'eraser') {
         eraserDidEraseRef.current = false;
         const snapshot = [...elementsRef.current];
-        const hit = getElementAtPoint(elementsRef.current, sx, sy, state.viewTransform.zoom);
+        const hit = getElementAtPoint(elementsRef.current, sx, sy, hitZoom);
         if (hit && !hit.isDeleted) {
           eraserDidEraseRef.current = true;
           onElementsChange(
@@ -528,7 +640,7 @@ export function CanvasBoard({
       }
 
       if (tool === 'text') {
-        const hit = getElementAtPoint(elementsRef.current, sx, sy, state.viewTransform.zoom);
+        const hit = getElementAtPoint(elementsRef.current, sx, sy, hitZoom);
         if (hit && hit.type === 'text') {
           onAppStateChange({ editingElementId: hit.id, selectedElementIds: new Set([hit.id]) });
           return;
@@ -556,7 +668,7 @@ export function CanvasBoard({
         interactionRef.current = { type: 'drawing', element: newEl, startX: sx, startY: sy };
       }
     },
-    [toScene, onAppStateChange, onElementsChange, onCommitHistory, runTrailFrame],
+    [toScene, onAppStateChange, onElementsChange, onCommitHistory, onLaserPoint, runTrailFrame, cancelInteraction, beginGesture],
   );
 
   const updateCursor = useCallback((sx: number, sy: number, state: AppState, els: DrawingElement[]): void => {
@@ -602,6 +714,15 @@ export function CanvasBoard({
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>): void => {
+      if (e.pointerType === 'touch' && touchPointsRef.current.has(e.pointerId)) {
+        lastTouchAtRef.current = performance.now();
+        touchPointsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (gestureActiveRef.current) {
+          if (touchPointsRef.current.size >= 2) updateGesture();
+          return;
+        }
+      }
+
       if (appStateRef.current.activeTool === 'eraser' && wrapRef.current) {
         const rect = wrapRef.current.getBoundingClientRect();
         const cx = e.clientX - rect.left;
@@ -617,8 +738,14 @@ export function CanvasBoard({
       }
 
       const [sx, sy] = toScene(e.clientX, e.clientY);
+      onPointerScenePosition?.(sx, sy);
       const interaction = interactionRef.current;
       const state = appStateRef.current;
+
+      if (interaction.type === 'laser') {
+        onLaserPoint?.(sx, sy);
+        return;
+      }
 
       if (interaction.type === 'idle') {
         updateCursor(sx, sy, state, elementsRef.current);
@@ -795,18 +922,34 @@ export function CanvasBoard({
 
         invalidateShape(updated);
         stagingRef.current = updated;
+        onDraft?.(updated);
         interactionRef.current = { ...interaction, element: updated };
         scheduleRender();
         return;
       }
     },
-    [toScene, onAppStateChange, onElementsChange, scheduleRender, updateCursor],
+    [toScene, onAppStateChange, onElementsChange, onPointerScenePosition, onLaserPoint, onDraft, scheduleRender, updateCursor, updateGesture],
   );
 
   const onPointerUp = useCallback(
-    (): void => {
+    (e?: React.PointerEvent<HTMLCanvasElement>): void => {
+      if (e && e.pointerType === 'touch') {
+        touchPointsRef.current.delete(e.pointerId);
+        if (gestureActiveRef.current) {
+          if (touchPointsRef.current.size < 2) gestureStartRef.current = null;
+          if (touchPointsRef.current.size === 0) gestureActiveRef.current = false;
+          return;
+        }
+      }
+
       const interaction = interactionRef.current;
       const state = appStateRef.current;
+
+      if (interaction.type === 'laser') {
+        interactionRef.current = { type: 'idle' };
+        onLaserEnd?.();
+        return;
+      }
 
       if (interaction.type === 'panning') {
         if (canvasRef.current) {
@@ -862,6 +1005,7 @@ export function CanvasBoard({
       if (interaction.type === 'drawing') {
         const el = interaction.element;
         stagingRef.current = null;
+        onDraft?.(null);
         interactionRef.current = { type: 'idle' };
 
         const isLinear = el.type === 'line' || el.type === 'arrow';
@@ -894,7 +1038,7 @@ export function CanvasBoard({
         return;
       }
     },
-    [onAppStateChange, onElementsChange, onCommitHistory, scheduleRender],
+    [onAppStateChange, onElementsChange, onCommitHistory, onLaserEnd, onDraft, scheduleRender],
   );
 
   const onDoubleClick = useCallback(
@@ -973,6 +1117,7 @@ export function CanvasBoard({
     };
     invalidateShape(updated);
     onElementsChange(prev => prev.map(e => (e.id === updated.id ? updated : e)));
+    onDraft?.(null);
     onAppStateChange({
       editingElementId: null,
       ...(appStateRef.current.toolLocked
@@ -980,7 +1125,16 @@ export function CanvasBoard({
         : { activeTool: 'select' as const }),
       selectedElementIds: isEmpty ? new Set<string>() : new Set([updated.id]),
     });
-  }, [onElementsChange, onAppStateChange]);
+  }, [onElementsChange, onAppStateChange, onDraft]);
+
+  const emitTextDraft = useCallback((value: string): void => {
+    const ctx = canvasRef.current?.getContext('2d');
+    const { editingElementId } = appStateRef.current;
+    const el = elementsRef.current.find(e => e.id === editingElementId) as TextElement | undefined;
+    if (!onDraft || !ctx || !el) return;
+    const dims = measureText(value || ' ', el.fontSize, ctx, el.fontFamily);
+    onDraft({ ...el, text: value, width: dims.width, height: dims.height });
+  }, [onDraft]);
 
   useEffect(() => {
     commitTextEditRef.current = commitTextEdit;
@@ -1014,10 +1168,11 @@ export function CanvasBoard({
       <canvas
         ref={canvasRef}
         className="absolute inset-0"
-        style={{ filter: 'var(--theme-filter)' }}
+        style={{ filter: 'var(--theme-filter)', touchAction: 'none' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         onPointerLeave={() => {
           if (eraserCursorRef.current) eraserCursorRef.current.style.display = 'none';
           onPointerUp();
@@ -1061,6 +1216,7 @@ export function CanvasBoard({
           onChange={e => {
             e.target.style.height = 'auto';
             e.target.style.height = `${e.target.scrollHeight}px`;
+            emitTextDraft(e.target.value);
           }}
           onBlur={commitTextEdit}
           onKeyDown={e => {

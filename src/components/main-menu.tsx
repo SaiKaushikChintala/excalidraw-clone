@@ -21,13 +21,13 @@ export function MainMenu({ appState, onAppStateChange }: Props): React.JSX.Eleme
 
   useEffect(() => {
     if (!open) return;
-    const handle = (e: MouseEvent) => {
+    const handle = (e: PointerEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
     };
-    document.addEventListener('mousedown', handle);
-    return () => document.removeEventListener('mousedown', handle);
+    document.addEventListener('pointerdown', handle, true);
+    return () => document.removeEventListener('pointerdown', handle, true);
   }, [open]);
 
   return (

@@ -1,7 +1,14 @@
 import rough from 'roughjs/bin/rough';
 import { getStroke } from 'perfect-freehand';
 
-import type { DrawingElement, FreeDrawElement, LinearElement, TextElement, ViewTransform } from '@/types';
+import type {
+  DrawingElement,
+  FreeDrawElement,
+  LinearElement,
+  TextElement,
+  ViewTransform,
+  RemoteSelection,
+} from '@/types';
 import { getElementBounds, getResizeHandles, getLinearHandles, FONT_FAMILY_CSS } from '@/utils/element-utils';
 import { getElementShape } from '@/utils/shape-utils';
 import { HANDLE_SIZE } from '@/utils/constants';
@@ -173,6 +180,59 @@ export function renderDragSelection(
   ctx.restore();
 }
 
+function renderRemoteSelections(
+  ctx: CanvasRenderingContext2D,
+  elements: DrawingElement[],
+  remoteSelections: RemoteSelection[],
+  zoom: number,
+): void {
+  const byId = new Map(elements.map(el => [el.id, el]));
+  const pad = 6 / zoom;
+
+  for (const selection of remoteSelections) {
+    let labelPlaced = false;
+    for (const id of selection.ids) {
+      const el = byId.get(id);
+      if (!el || el.isDeleted) continue;
+      const b = getElementBounds(el);
+      const rotatable = el.type !== 'line' && el.type !== 'arrow' && el.type !== 'freedraw';
+
+      ctx.save();
+      ctx.strokeStyle = selection.color;
+      ctx.lineWidth = 2 / zoom;
+      ctx.setLineDash([6 / zoom, 4 / zoom]);
+      if (rotatable) {
+        ctx.translate(b.x + b.width / 2, b.y + b.height / 2);
+        ctx.rotate(el.angle);
+        ctx.strokeRect(-b.width / 2 - pad, -b.height / 2 - pad, b.width + 2 * pad, b.height + 2 * pad);
+      } else {
+        ctx.strokeRect(b.x - pad, b.y - pad, b.width + 2 * pad, b.height + 2 * pad);
+      }
+      ctx.restore();
+
+      if (!labelPlaced) {
+        labelPlaced = true;
+        const fontSize = 11 / zoom;
+        ctx.save();
+        ctx.font = `600 ${fontSize}px sans-serif`;
+        const textWidth = ctx.measureText(selection.name).width;
+        const boxH = fontSize + 6 / zoom;
+        const boxW = textWidth + 10 / zoom;
+        const lx = b.x - pad;
+        const ly = b.y - pad - boxH - 3 / zoom;
+        ctx.fillStyle = selection.color;
+        ctx.beginPath();
+        ctx.roundRect(lx, ly, boxW, boxH, boxH / 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(selection.name, lx + 5 / zoom, ly + boxH / 2);
+        ctx.restore();
+      }
+    }
+  }
+}
+
 type RenderSceneOptions = {
   elements: DrawingElement[];
   selectedIds: Set<string>;
@@ -182,6 +242,8 @@ type RenderSceneOptions = {
   stagingElement?: DrawingElement | null;
   dragSelection?: { x1: number; y1: number; x2: number; y2: number } | null;
   editingId?: string | null;
+  remoteSelections?: RemoteSelection[];
+  remoteDrafts?: DrawingElement[];
 };
 
 export function renderScene({
@@ -193,6 +255,8 @@ export function renderScene({
   stagingElement,
   dragSelection,
   editingId,
+  remoteSelections,
+  remoteDrafts,
 }: RenderSceneOptions): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -207,14 +271,25 @@ export function renderScene({
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.setTransform(zoom * dpr, 0, 0, zoom * dpr, scrollX * dpr, scrollY * dpr);
 
+  const draftIds = new Set((remoteDrafts ?? []).map(draft => draft.id));
+
   for (const el of elements) {
     if (el.isDeleted) continue;
     if (el.id === editingId) continue;
+    if (draftIds.has(el.id)) continue;
     renderElement(el, rc, ctx);
   }
 
   if (stagingElement && !stagingElement.isDeleted) {
     renderElement(stagingElement, rc, ctx);
+  }
+
+  for (const draft of remoteDrafts ?? []) {
+    if (!draft.isDeleted) renderElement(draft, rc, ctx);
+  }
+
+  if (remoteSelections && remoteSelections.length > 0) {
+    renderRemoteSelections(ctx, elements, remoteSelections, zoom);
   }
 
   if (dragSelection) {

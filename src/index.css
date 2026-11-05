@@ -19,6 +19,18 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input,
+[role='button'] {
+  touch-action: manipulation;
+}
+
 html, body, #root {
   height: 100%;
   margin: 0;

@@ -13,6 +13,7 @@ import {
   FreedrawIcon,
   TextIcon,
   EraserIcon,
+  LaserPointerIcon,
   LockedIcon,
   UnlockedIcon,
 } from '@/components/icons';
@@ -36,6 +37,7 @@ const TOOLS: Tool[] = [
   { type: 'freedraw', label: 'Draw', shortcut: 'P / 7', badge: '7', Icon: FreedrawIcon },
   { type: 'text', label: 'Text', shortcut: 'T / 8', badge: '8', Icon: TextIcon },
   { type: 'eraser', label: 'Eraser', shortcut: 'E / 0', badge: '0', Icon: EraserIcon },
+  { type: 'laser', label: 'Laser pointer', shortcut: 'K', Icon: LaserPointerIcon },
 ];
 
 type Props = {
